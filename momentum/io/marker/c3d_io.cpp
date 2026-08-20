@@ -105,12 +105,20 @@ std::vector<std::string> loadPointLabels(
   constexpr size_t kAdditionSectionStartIndex = 2;
 
   auto pointLabels = pointGroup.parameter(kLabelStr).valuesAsString();
-  const size_t numOfExtraSections = kPointsPerFrame / kNumLabelsPerSection;
+  // Section k (k >= 2) stores labels [(k - 1) * 255, k * 255), so the number of
+  // overflow sections past LABELS itself is ceil(n / 255) - 1 == (n - 1) / 255 for n > 0.
+  const size_t numOfExtraSections =
+      kPointsPerFrame > 0 ? (kPointsPerFrame - 1) / kNumLabelsPerSection : 0;
   pointLabels.reserve(kPointsPerFrame);
   for (size_t sectionId = kAdditionSectionStartIndex;
        sectionId < kAdditionSectionStartIndex + numOfExtraSections;
        sectionId++) {
     const auto labelStr = kLabelStr + std::to_string(sectionId);
+    // A missing overflow section means the header overstates the point count; let the
+    // size check below report the mismatch instead of throwing on the absent parameter.
+    if (!pointGroup.isParameter(labelStr)) {
+      break;
+    }
     const auto& additionalPointLabels = pointGroup.parameter(labelStr).valuesAsString();
     pointLabels.insert(
         pointLabels.end(), additionalPointLabels.begin(), additionalPointLabels.end());
